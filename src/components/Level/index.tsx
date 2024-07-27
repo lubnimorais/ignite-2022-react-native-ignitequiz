@@ -1,10 +1,13 @@
-import { Pressable, PressableProps, Text } from 'react-native';
+import { useCallback, useEffect } from 'react';
 
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { Pressable, PressableProps } from 'react-native';
+
+import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { THEME } from '../../styles/theme';
 import { styles } from './styles';
-import { useCallback } from 'react';
+
+const PressableAnimated = Animated.createAnimatedComponent(Pressable)
 
 const TYPE_COLORS = {
   EASY: THEME.COLORS.BRAND_LIGHT,
@@ -20,12 +23,28 @@ type Props = PressableProps & {
 
 export function Level({ title, type = 'EASY', isChecked = false, ...rest }: Props) {
   const scale = useSharedValue(1)
+  const checked = useSharedValue(1)
 
   const COLOR = TYPE_COLORS[type];
 
   const animatedContainerStyles = useAnimatedStyle(() => {
     return {
-      transform: [{ scale: scale.value}]
+      transform: [{ scale: scale.value }],
+      backgroundColor: interpolateColor(
+        checked.value,
+        [0, 1],
+        ['transparent', COLOR]
+      )
+    }
+  })
+
+  const animatedTextStyles = useAnimatedStyle(() => {
+    return {
+      color: interpolateColor(
+        checked.value,
+        [0, 1],
+        [COLOR, THEME.COLORS.GREY_100]
+      )
     }
   })
 
@@ -37,23 +56,25 @@ export function Level({ title, type = 'EASY', isChecked = false, ...rest }: Prop
     scale.value = withTiming(1)
   }, [])
 
+  useEffect(() => {
+    checked.value = withTiming(isChecked ? 1 : 0)
+  }, [isChecked])
+
   return (
-    <Pressable onPressIn={onPressIn} onPressOut={onPressOut} {...rest}>
-      <Animated.View style={
+    <PressableAnimated
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      style={
         [
           styles.container,
+          { borderColor: COLOR },
           animatedContainerStyles,
-          { borderColor: COLOR, backgroundColor: isChecked ? COLOR : 'transparent' }
-        ]
-      }>
-        <Text style={
-          [
-            styles.title,
-            { color: isChecked ? THEME.COLORS.GREY_100 : COLOR }
-          ]}>
-          {title}
-        </Text>
-      </Animated.View>
-    </Pressable>
+        ]}
+      {...rest}
+    >
+      <Animated.Text style={[styles.title, animatedTextStyles]}>
+        {title}
+      </Animated.Text>
+    </PressableAnimated>
   );
 }
