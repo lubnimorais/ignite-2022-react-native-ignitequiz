@@ -7,7 +7,31 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.COLORS.GREY_800,
   },
+
   history: {
+    flexGrow: 1,
     padding: 32,
+  },
+
+  swipeableContainer: {
+    width: '100%',
+    height: 90,
+
+    backgroundColor: THEME.COLORS.DANGER_LIGHT,
+
+    borderRadius: 6,
+
+    marginBottom: 12
+  },
+
+  swipeableRemove: {
+    width: 90,
+    height: 90,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    borderRadius: 6,
+    backgroundColor: THEME.COLORS.DANGER_LIGHT
   }
 });

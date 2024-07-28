@@ -6,6 +6,15 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.COLORS.GREY_800,
   },
+  title: {
+    fontFamily: THEME.FONTS.BOLD,
+    fontSize: 16,
+    color: THEME.COLORS.GREY_100,
+    
+    textAlign: 'center',
+
+    marginBottom: 7,
+  },
   question: {
     alignItems: 'center',
     paddingTop: 80,
