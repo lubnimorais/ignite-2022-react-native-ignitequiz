@@ -15,6 +15,10 @@ export const styles = StyleSheet.create({
 
     marginBottom: 7,
   },
+  header: {
+    width: '100%',
+    marginBottom: 21,
+  },
   question: {
     alignItems: 'center',
     paddingTop: 80,

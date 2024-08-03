@@ -6,13 +6,17 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import Animated, {
   Easing,
+  Extrapolate,
   interpolate,
+  runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
   withTiming
 } from 'react-native-reanimated';
+
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { QUIZ } from '../../data/quiz';
 import { historyAdd } from '../../storage/quizHistoryStorage';
@@ -32,6 +36,12 @@ interface Params {
 
 type QuizProps = typeof QUIZ[0];
 
+const CARD_INCLINATION = 10;
+
+// DEFININDO ÁREA PARA CONSIDERAR QUE O USUÁRIO QUER
+// DESCARTAR A PERGUNTA
+const CARD_SKIP_AREA = (-200); 
+
 export function Quiz() {
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,15 +56,16 @@ export function Quiz() {
 
   const shake = useSharedValue(0);
   const scrollY = useSharedValue(0);
+  const cardPosition = useSharedValue(0);
 
   const shakeStyleAnimated = useAnimatedStyle(() => {
     return {
-      transform: [{ 
+      transform: [{
         translateX: interpolate(
           shake.value,
           [0, 0.5, 1, 1.5, 2, 2.5, 3],
           [0, -15, 0, 15, 0, -15, 0]
-        ) 
+        )
       }]
     }
   });
@@ -121,7 +132,7 @@ export function Quiz() {
 
   function shakeAnimation() {
     shake.value = withSequence(
-      withTiming(3, { duration: 400, easing: Easing.bounce}), 
+      withTiming(3, { duration: 400, easing: Easing.bounce }),
       withTiming(0)
     )
   }
@@ -136,9 +147,64 @@ export function Quiz() {
     return {
       width: '110%',
       position: 'absolute',
+      zIndex: 1,
       left: '-5%',
       paddingTop: 50,
-      backgroundColor: THEME.COLORS.GREY_500
+      backgroundColor: THEME.COLORS.GREY_500,
+      /** 
+       * NA PRIMEIRA POSIÇÃO UTILIZAMOS O VALOR COMPARTILHADO 
+       * NA SEGUNDA POSIÇÃO QUEREMOS QUE A OPACIDADE COMECE QUANDO
+       * A POSIÇÃO DA SCROLL ESTIVER ENTRE 50 E 90
+       * NA TERCEIRA POSIÇÃO VAMOS DEFINIR QUAL VALOR QUEREMOS QUE TENHA
+       * EM CADA MOMENTO PASSADO PELO SEGUNDO PARÂMETRO
+       * OUTRA PROPRIEDADE QUE VAMOS PASSAR É PARA GARANTIR QUE ELE
+       * TRABALHE DENTRO DA FAIXA PASSADA NA SEGUNDA POSIÇÃO
+      */
+      opacity: interpolate(scrollY.value, [50, 90], [0, 1], Extrapolate.CLAMP),
+      /**
+       * -40 PARA ELE SAIR DA TELA
+       * 0 PARA ELE IR PARA A POSIÇÃO QUE DEFINIMOS ELE
+       * 
+       */
+      transform: [
+        { translateY: interpolate(scrollY.value, [50, 100], [-40, 0], Extrapolate.CLAMP) }
+      ],
+    }
+  });
+
+  const headerStyles = useAnimatedStyle(() => {
+    return {
+      opacity: interpolate(scrollY.value, [50, 100], [1, 0], Extrapolate.CLAMP)
+    }
+  })
+
+  const onPan = Gesture
+    .Pan()
+    .activateAfterLongPress(200)
+    .onUpdate((event) => {
+      // VERIFICANDO PARA QUAL LADO ESTÁ SENDO ARRASTADO
+      const moveToLeft = event.translationX < 0
+
+      if (moveToLeft) {
+        cardPosition.value = event.translationX;
+      }
+    })
+    .onEnd((event) => {
+      if (event.translationX < CARD_SKIP_AREA) {
+        runOnJS(handleSkipConfirm)()
+      }
+      cardPosition.value = withTiming(0)
+    })
+
+  const dragStyles = useAnimatedStyle(() => {
+    // FATOR DE ROTAÇÃO
+    const rotateZ = cardPosition.value / CARD_INCLINATION;
+
+    return {
+      transform: [
+        { translateX: cardPosition.value },
+        { rotateZ: `${rotateZ}deg` }
+      ]
     }
   })
 
@@ -178,20 +244,25 @@ export function Quiz() {
         // PROPRIEDADE IMPORTANTE PRINCIPALMENTE PARA O IOS
         scrollEventThrottle={16}
       >
-        <QuizHeader
-          title={quiz.title}
-          currentQuestion={currentQuestion + 1}
-          totalOfQuestions={quiz.questions.length}
-        />
 
-        <Animated.View style={shakeStyleAnimated}>
-          <Question
-            key={quiz.questions[currentQuestion].title}
-            question={quiz.questions[currentQuestion]}
-            alternativeSelected={alternativeSelected}
-            setAlternativeSelected={setAlternativeSelected}
+        <Animated.View style={[styles.header, headerStyles]}>
+          <QuizHeader
+            title={quiz.title}
+            currentQuestion={currentQuestion + 1}
+            totalOfQuestions={quiz.questions.length}
           />
         </Animated.View>
+
+        <GestureDetector gesture={onPan}>
+          <Animated.View style={[shakeStyleAnimated, dragStyles]}>
+            <Question
+              key={quiz.questions[currentQuestion].title}
+              question={quiz.questions[currentQuestion]}
+              alternativeSelected={alternativeSelected}
+              setAlternativeSelected={setAlternativeSelected}
+            />
+          </Animated.View>
+        </GestureDetector>
 
         <View style={styles.footer}>
           <OutlineButton title="Parar" onPress={handleStop} />
