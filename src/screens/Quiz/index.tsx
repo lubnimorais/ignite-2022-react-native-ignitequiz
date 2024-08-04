@@ -13,7 +13,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
-  withTiming
+  withTiming,
 } from 'react-native-reanimated';
 
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -27,6 +27,7 @@ import { QuizHeader } from '../../components/QuizHeader';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { OutlineButton } from '../../components/OutlineButton';
 import { ProgressBar } from '../../components/ProgressBar';
+import { OverlayFeedback } from '../../components/OverlayFeedback';
 
 import { styles } from './styles';
 import { THEME } from '../../styles/theme';
@@ -34,20 +35,23 @@ interface Params {
   id: string;
 }
 
-type QuizProps = typeof QUIZ[0];
+type QuizProps = (typeof QUIZ)[0];
 
 const CARD_INCLINATION = 10;
 
 // DEFININDO ÁREA PARA CONSIDERAR QUE O USUÁRIO QUER
 // DESCARTAR A PERGUNTA
-const CARD_SKIP_AREA = (-200); 
+const CARD_SKIP_AREA = -200;
 
 export function Quiz() {
   const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [quiz, setQuiz] = useState<QuizProps>({} as QuizProps);
-  const [alternativeSelected, setAlternativeSelected] = useState<null | number>(null);
+  const [alternativeSelected, setAlternativeSelected] = useState<null | number>(
+    null,
+  );
+  const [statusReply, setStatusReply] = useState(0);
 
   const { navigate } = useNavigation();
 
@@ -60,20 +64,22 @@ export function Quiz() {
 
   const shakeStyleAnimated = useAnimatedStyle(() => {
     return {
-      transform: [{
-        translateX: interpolate(
-          shake.value,
-          [0, 0.5, 1, 1.5, 2, 2.5, 3],
-          [0, -15, 0, 15, 0, -15, 0]
-        )
-      }]
-    }
+      transform: [
+        {
+          translateX: interpolate(
+            shake.value,
+            [0, 0.5, 1, 1.5, 2, 2.5, 3],
+            [0, -15, 0, 15, 0, -15, 0],
+          ),
+        },
+      ],
+    };
   });
 
   function handleSkipConfirm() {
     Alert.alert('Pular', 'Deseja realmente pular a questão?', [
       { text: 'Sim', onPress: () => handleNextQuestion() },
-      { text: 'Não', onPress: () => { } }
+      { text: 'Não', onPress: () => {} },
     ]);
   }
 
@@ -83,7 +89,7 @@ export function Quiz() {
       title: quiz.title,
       level: quiz.level,
       points,
-      questions: quiz.questions.length
+      questions: quiz.questions.length,
     });
 
     navigate('finish', {
@@ -94,7 +100,7 @@ export function Quiz() {
 
   function handleNextQuestion() {
     if (currentQuestion < quiz.questions.length - 1) {
-      setCurrentQuestion(prevState => prevState + 1)
+      setCurrentQuestion((prevState) => prevState + 1);
     } else {
       handleFinished();
     }
@@ -106,9 +112,12 @@ export function Quiz() {
     }
 
     if (quiz.questions[currentQuestion].correct === alternativeSelected) {
-      setPoints(prevState => prevState + 1);
+      setStatusReply(1);
+      setPoints((prevState) => prevState + 1);
+      handleNextQuestion();
     } else {
-      shakeAnimation()
+      setStatusReply(2);
+      shakeAnimation();
     }
 
     setAlternativeSelected(null);
@@ -123,7 +132,7 @@ export function Quiz() {
       {
         text: 'Sim',
         style: 'destructive',
-        onPress: () => navigate('home')
+        onPress: () => navigate('home'),
       },
     ]);
 
@@ -133,15 +142,20 @@ export function Quiz() {
   function shakeAnimation() {
     shake.value = withSequence(
       withTiming(3, { duration: 400, easing: Easing.bounce }),
-      withTiming(0)
-    )
+      withTiming(0, undefined, (finished) => {
+        'worklet';
+        if (finished) {
+          runOnJS(handleNextQuestion)();
+        }
+      }),
+    );
   }
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
-    }
-  })
+    },
+  });
 
   const fixedProgressBarStyle = useAnimatedStyle(() => {
     return {
@@ -151,39 +165,45 @@ export function Quiz() {
       left: '-5%',
       paddingTop: 50,
       backgroundColor: THEME.COLORS.GREY_500,
-      /** 
-       * NA PRIMEIRA POSIÇÃO UTILIZAMOS O VALOR COMPARTILHADO 
+      /**
+       * NA PRIMEIRA POSIÇÃO UTILIZAMOS O VALOR COMPARTILHADO
        * NA SEGUNDA POSIÇÃO QUEREMOS QUE A OPACIDADE COMECE QUANDO
        * A POSIÇÃO DA SCROLL ESTIVER ENTRE 50 E 90
        * NA TERCEIRA POSIÇÃO VAMOS DEFINIR QUAL VALOR QUEREMOS QUE TENHA
        * EM CADA MOMENTO PASSADO PELO SEGUNDO PARÂMETRO
        * OUTRA PROPRIEDADE QUE VAMOS PASSAR É PARA GARANTIR QUE ELE
        * TRABALHE DENTRO DA FAIXA PASSADA NA SEGUNDA POSIÇÃO
-      */
+       */
       opacity: interpolate(scrollY.value, [50, 90], [0, 1], Extrapolate.CLAMP),
       /**
        * -40 PARA ELE SAIR DA TELA
        * 0 PARA ELE IR PARA A POSIÇÃO QUE DEFINIMOS ELE
-       * 
+       *
        */
       transform: [
-        { translateY: interpolate(scrollY.value, [50, 100], [-40, 0], Extrapolate.CLAMP) }
+        {
+          translateY: interpolate(
+            scrollY.value,
+            [50, 100],
+            [-40, 0],
+            Extrapolate.CLAMP,
+          ),
+        },
       ],
-    }
+    };
   });
 
   const headerStyles = useAnimatedStyle(() => {
     return {
-      opacity: interpolate(scrollY.value, [50, 100], [1, 0], Extrapolate.CLAMP)
-    }
-  })
+      opacity: interpolate(scrollY.value, [50, 100], [1, 0], Extrapolate.CLAMP),
+    };
+  });
 
-  const onPan = Gesture
-    .Pan()
+  const onPan = Gesture.Pan()
     .activateAfterLongPress(200)
     .onUpdate((event) => {
       // VERIFICANDO PARA QUAL LADO ESTÁ SENDO ARRASTADO
-      const moveToLeft = event.translationX < 0
+      const moveToLeft = event.translationX < 0;
 
       if (moveToLeft) {
         cardPosition.value = event.translationX;
@@ -191,10 +211,10 @@ export function Quiz() {
     })
     .onEnd((event) => {
       if (event.translationX < CARD_SKIP_AREA) {
-        runOnJS(handleSkipConfirm)()
+        runOnJS(handleSkipConfirm)();
       }
-      cardPosition.value = withTiming(0)
-    })
+      cardPosition.value = withTiming(0);
+    });
 
   const dragStyles = useAnimatedStyle(() => {
     // FATOR DE ROTAÇÃO
@@ -203,16 +223,16 @@ export function Quiz() {
     return {
       transform: [
         { translateX: cardPosition.value },
-        { rotateZ: `${rotateZ}deg` }
-      ]
-    }
-  })
+        { rotateZ: `${rotateZ}deg` },
+      ],
+    };
+  });
 
   useEffect(() => {
-    const quizSelected = QUIZ.filter(item => item.id === id)[0];
+    const quizSelected = QUIZ.filter((item) => item.id === id)[0];
     setQuiz(quizSelected);
     setIsLoading(false);
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     if (quiz.questions) {
@@ -221,15 +241,15 @@ export function Quiz() {
   }, [points]);
 
   if (isLoading) {
-    return <Loading />
+    return <Loading />;
   }
 
   return (
     <View style={styles.container}>
+      <OverlayFeedback status={statusReply} />
+
       <Animated.View style={fixedProgressBarStyle}>
-        <Text style={styles.title}>
-          {quiz.title}
-        </Text>
+        <Text style={styles.title}>{quiz.title}</Text>
 
         <ProgressBar
           total={quiz.questions.length}
@@ -244,7 +264,6 @@ export function Quiz() {
         // PROPRIEDADE IMPORTANTE PRINCIPALMENTE PARA O IOS
         scrollEventThrottle={16}
       >
-
         <Animated.View style={[styles.header, headerStyles]}>
           <QuizHeader
             title={quiz.title}
@@ -260,6 +279,9 @@ export function Quiz() {
               question={quiz.questions[currentQuestion]}
               alternativeSelected={alternativeSelected}
               setAlternativeSelected={setAlternativeSelected}
+              onUnmount={() => {
+                setStatusReply(0);
+              }}
             />
           </Animated.View>
         </GestureDetector>
@@ -269,6 +291,6 @@ export function Quiz() {
           <ConfirmButton onPress={handleConfirm} />
         </View>
       </Animated.ScrollView>
-    </View >
+    </View>
   );
 }
